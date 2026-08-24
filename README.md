@@ -2,7 +2,7 @@
 
 **What 207,229 published bus delays say about why Toronto buses don't show up.**
 
-Live page → **https://thukzom.github.io/ttc-bus-delays/](https://thukzom.github.io/ttc_delays_analysis/)**
+Live page → **https://thukzom.github.io/ttc_delays_analysis/**
 
 ---
 
