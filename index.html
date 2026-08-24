@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TTC Bus Delays — how much, why, and where</title>
+<meta name="description" content="An analysis of every bus delay the Toronto Transit Commission has published: what causes them, where they happen, and when.">
+<style>
+:root, :root[data-theme="light"] {
+  color-scheme: light;
+  --plane:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --ink-muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+  --blue:#2a78d6; --orange:#eb6834; --aqua:#1baf7a;
+  --shadow:0 1px 2px rgba(11,11,11,.05), 0 4px 16px rgba(11,11,11,.04);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink-2:#c3c2b7; --ink-muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+  --blue:#3987e5; --orange:#d95926; --aqua:#199e70;
+  --shadow:none;
+}
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{background:var(--plane);color:var(--ink);
+     font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:30px 20px 70px}
+
+header.top{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:8px}
+h1{font-size:27px;line-height:1.2;margin:0 0 8px;letter-spacing:-.01em}
+.lede{color:var(--ink-2);font-size:14.5px;margin:0;max-width:66ch}
+.stamp{color:var(--ink-muted);font-size:12.5px;margin-top:10px}
+button.ghost{background:var(--surface);color:var(--ink-2);border:1px solid var(--border);
+  border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+button.ghost:hover{color:var(--ink)}
+button.ghost:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+section{margin-top:38px}
+h2{font-size:19px;margin:0 0 16px;letter-spacing:-.01em}
+h2 .q{color:var(--ink-muted);font-weight:400}
+.note{color:var(--ink-muted);font-size:13.5px;margin:0 0 16px;max-width:74ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:18px 18px 14px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:880px){.g4{grid-template-columns:repeat(2,1fr)}.g2{grid-template-columns:1fr}}
+@media(max-width:460px){.g4{grid-template-columns:1fr}}
+
+.tile .label{font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.tile .value{font-size:31px;line-height:1.05;font-weight:600;letter-spacing:-.02em}
+.tile .foot{font-size:12.5px;color:var(--ink-muted);margin-top:6px}
+
+.chart-title{font-size:15px;font-weight:600;margin:0 0 14px}
+.chart-sub{font-size:12.5px;color:var(--ink-muted);margin:3px 0 14px}
+svg{display:block;width:100%;overflow:visible}
+.tbl-toggle{background:none;border:none;color:var(--ink-2);font:inherit;font-size:12.5px;
+  cursor:pointer;padding:6px 0 0;text-decoration:underline;text-underline-offset:3px}
+.tbl-toggle:hover{color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--grid)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--ink-2);font-weight:600}
+.hidden{display:none}
+
+#tip{position:fixed;pointer-events:none;z-index:50;opacity:0;transition:opacity .08s;
+  background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;font-size:12.5px;box-shadow:0 4px 18px rgba(0,0,0,.14);max-width:280px;
+  font-variant-numeric:tabular-nums}
+#tip b{display:block;margin-bottom:3px}
+#tip span{color:var(--ink-2);display:flex;gap:12px;justify-content:space-between}
+
+.empty{color:var(--ink-muted);font-size:14px;padding:40px 20px;text-align:center;line-height:1.7}
+.empty code{background:var(--plane);border:1px solid var(--border);border-radius:5px;padding:2px 7px}
+footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--grid);
+  color:var(--ink-muted);font-size:12.5px}
+footer a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div style="flex:1 1 420px">
+      <h1>TTC Bus Delays</h1>
+      <p class="lede">
+        Every bus delay the Toronto Transit Commission has published, cleaned and counted
+        to answer three questions: <strong>how much time do we lose</strong>,
+        <strong>why</strong>, and <strong>where</strong>.
+      </p>
+      <p class="stamp" id="stamp">Loading…</p>
+    </div>
+    <button class="ghost" id="theme-btn">Dark mode</button>
+  </header>
+
+  <div id="finding"></div>
+
+  <section>
+    <div class="grid g4" id="tiles"></div>
+  </section>
+
+  <!-- ===================== WHY ===================== -->
+  <section>
+    <h2>Why buses are delayed</h2>
+    <div class="card">
+      <p class="chart-title">Causes, by hours of service lost</p>
+      <div id="c-causes"></div>
+      <button class="tbl-toggle" data-t="t-causes">Show data table</button>
+      <div id="t-causes" class="hidden"></div>
+    </div>
+  </section>
+
+  <!-- ===================== WHERE ===================== -->
+  <section>
+    <h2>Where they happen</h2>
+    <div class="grid g2">
+      <div class="card">
+        <p class="chart-title">Locations with the most lost time</p>
+        <div id="c-locations"></div>
+        <button class="tbl-toggle" data-t="t-locations">Show data table</button>
+        <div id="t-locations" class="hidden"></div>
+      </div>
+      <div class="card">
+        <p class="chart-title">Routes with the most lost time</p>
+        <div id="c-routes"></div>
+        <button class="tbl-toggle" data-t="t-routes">Show data table</button>
+        <div id="t-routes" class="hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WHEN ===================== -->
+  <section>
+    <h2>When they happen</h2>
+    <div class="grid g2">
+      <div class="card">
+        <p class="chart-title">By hour of the day</p>
+        <div id="c-hour"></div>
+        <button class="tbl-toggle" data-t="t-hour">Show data table</button>
+        <div id="t-hour" class="hidden"></div>
+      </div>
+      <div class="card">
+        <p class="chart-title">By month</p>
+        <div id="c-month"></div>
+        <button class="tbl-toggle" data-t="t-month">Show data table</button>
+        <div id="t-month" class="hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Data: <a href="https://open.toronto.ca/dataset/ttc-bus-delay-data/" target="_blank"
+      rel="noopener">City of Toronto Open Data — TTC Bus Delay Data</a>, published monthly
+      under the Open Government Licence – Toronto. Built with Python and pandas;
+      the full cleaning script is <code>analyze.py</code> in this repository.
+      An independent student project, not affiliated with the TTC.
+    </p>
+  </footer>
+</div>
+
+<div id="tip"></div>
+
+<script>
+"use strict";
+/* A small chart layer: two shapes, a hover tooltip, and a table fallback.
+   No libraries, so the page works anywhere with no build step. */
+
+const $ = s => document.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const num = n => (n === null || n === undefined || isNaN(n)) ? "–" : Math.round(n).toLocaleString("en-CA");
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function el(tag, attrs, text) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) if (attrs[k] !== null) n.setAttribute(k, attrs[k]);
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+const tip = $("#tip");
+function showTip(e, title, rows) {
+  tip.innerHTML = `<b>${title}</b>` + rows.map(r => `<span><span>${r[0]}</span><span>${r[1]}</span></span>`).join("");
+  tip.style.opacity = 1;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + tip.offsetWidth > innerWidth - 8) x = e.clientX - tip.offsetWidth - 14;
+  if (y + tip.offsetHeight > innerHeight - 8) y = e.clientY - tip.offsetHeight - 14;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => tip.style.opacity = 0;
+
+/* Horizontal bars — for ranked lists (causes, locations, routes) */
+function bars(hostId, rows, colorVar, tipRows) {
+  const host = $(hostId); host.innerHTML = "";
+  if (!rows || !rows.length) { host.innerHTML = '<p class="empty">No data.</p>'; return; }
+  const W = host.clientWidth || 500, barH = 21, gap = 7;
+  const labelW = Math.min(200, Math.max(80, W * 0.36)), valueW = 58;
+  const iw = Math.max(30, W - labelW - valueW);
+  const max = Math.max(...rows.map(r => r.hours)) || 1;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${rows.length * (barH + gap)}`,
+                          height: rows.length * (barH + gap) });
+  rows.forEach((r, i) => {
+    const y = i * (barH + gap), w = Math.max(2, r.hours / max * iw);
+    const label = String(r.label).length > 26 ? String(r.label).slice(0, 24) + "…" : r.label;
+    svg.appendChild(el("text", { x: labelW - 10, y: y + barH / 2 + 4, "text-anchor": "end",
+                                 fill: css("--ink-2"), "font-size": 12.5 }, label));
+    svg.appendChild(el("rect", { x: labelW, y, width: w, height: barH, rx: 4, fill: css(colorVar) }));
+    svg.appendChild(el("text", { x: labelW + w + 8, y: y + barH / 2 + 4,
+                                 fill: css("--ink-2"), "font-size": 12.5 }, num(r.hours) + "h"));
+    const hit = el("rect", { x: 0, y: y - gap / 2, width: W, height: barH + gap, fill: "transparent" });
+    hit.addEventListener("pointermove", e => showTip(e, r.label, tipRows(r)));
+    hit.addEventListener("pointerleave", hideTip);
+    svg.appendChild(hit);
+  });
+  host.appendChild(svg);
+}
+
+/* Vertical columns — for anything ordered by time (hours, months) */
+function columns(hostId, rows, valueKey, labelFn, colorVar, tipRows, everyNth) {
+  const host = $(hostId); host.innerHTML = "";
+  if (!rows || !rows.length) { host.innerHTML = '<p class="empty">No data.</p>'; return; }
+  const W = host.clientWidth || 500, H = 220, M = { t: 12, r: 6, b: 24, l: 46 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const max = Math.max(...rows.map(r => r[valueKey])) || 1;
+  const step = iw / rows.length, bw = Math.max(2, step - 2);
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H });
+
+  for (let k = 0; k <= 4; k++) {
+    const v = max * k / 4, y = M.t + ih - (v / max) * ih;
+    svg.appendChild(el("line", { x1: M.l, x2: M.l + iw, y1: y, y2: y,
+                                 stroke: css(k ? "--grid" : "--axis"), "stroke-width": 1 }));
+    svg.appendChild(el("text", { x: M.l - 8, y: y + 4, "text-anchor": "end",
+                                 fill: css("--ink-muted"), "font-size": 11 }, num(v)));
+  }
+  rows.forEach((r, i) => {
+    const v = r[valueKey] || 0, h = Math.max(1, v / max * ih);
+    const x = M.l + i * step + (step - bw) / 2;
+    svg.appendChild(el("rect", { x, y: M.t + ih - h, width: bw, height: h, rx: 3, fill: css(colorVar) }));
+    const lab = i % everyNth === 0 ? labelFn(r, i) : "";
+    if (lab)
+      svg.appendChild(el("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle",
+                                   fill: css("--ink-muted"), "font-size": 11 }, lab));
+    const hit = el("rect", { x: M.l + i * step, y: M.t, width: step, height: ih, fill: "transparent" });
+    hit.addEventListener("pointermove", e => showTip(e, labelFn(r, i, true), tipRows(r)));
+    hit.addEventListener("pointerleave", hideTip);
+    svg.appendChild(hit);
+  });
+  host.appendChild(svg);
+}
+
+function table(id, headers, rows) {
+  $("#" + id).innerHTML = "<table><thead><tr>" + headers.map(h => `<th>${h}</th>`).join("") +
+    "</tr></thead><tbody>" + rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") +
+    "</tbody></table>";
+}
+document.querySelectorAll(".tbl-toggle").forEach(b => b.addEventListener("click", () => {
+  const t = $("#" + b.dataset.t), open = !t.classList.contains("hidden");
+  t.classList.toggle("hidden", open);
+  b.textContent = open ? "Show data table" : "Hide data table";
+}));
+
+const hourLabel = h => { const x = h % 12 === 0 ? 12 : h % 12; return x + (h < 12 ? "am" : "pm"); };
+const monthLabel = m => {
+  const [y, mo] = String(m).split("-");
+  return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+mo - 1] + " " + y;
+};
+
+let DATA = null;
+
+function render() {
+  if (!DATA) return;
+  const m = DATA.meta;
+
+  $("#tiles").innerHTML = [
+    { label: "Delays recorded", value: num(m.incidents), foot: `${m.first_date} to ${m.last_date}` },
+    { label: "Service time lost", value: num(m.total_hours) + " h", foot: "across all routes" },
+    { label: "Typical delay", value: m.median_minutes + " min", foot: `average ${m.average_minutes} min` },
+    { label: "Places named", value: num(m.locations_named), foot: "after matching spellings" },
+  ].map(t => `<div class="card tile"><div class="label">${t.label}</div>
+      <div class="value">${t.value}</div><div class="foot">${t.foot}</div></div>`).join("");
+
+  const share = h => (100 * h / Math.max(1, m.total_hours)).toFixed(1) + "% of all lost time";
+  const rank = r => [["Hours lost", num(r.hours)], ["Times it happened", num(r.incidents)],
+                     ["Average length", r.average + " min"], ["Share", share(r.hours)]];
+
+  bars("#c-causes", DATA.causes, "--blue", rank);
+  table("t-causes", ["Cause", "Hours lost", "Incidents", "Avg (min)"],
+        DATA.causes.map(r => [r.label, num(r.hours), num(r.incidents), r.average]));
+
+  bars("#c-locations", DATA.locations, "--orange", rank);
+  table("t-locations", ["Location", "Hours lost", "Incidents", "Avg (min)"],
+        DATA.locations.map(r => [r.label, num(r.hours), num(r.incidents), r.average]));
+
+  bars("#c-routes", DATA.routes.map(r => ({ ...r, label: "Route " + r.label })), "--blue", rank);
+  table("t-routes", ["Route", "Hours lost", "Incidents", "Avg (min)"],
+        DATA.routes.map(r => [r.label, num(r.hours), num(r.incidents), r.average]));
+
+  columns("#c-hour", DATA.by_hour, "incidents", (r, i, full) => full ? hourLabel(r.hour) : hourLabel(r.hour),
+          "--blue", r => [["Delays", num(r.incidents)], ["Hours lost", num(r.minutes / 60)]], 3);
+  table("t-hour", ["Hour", "Delays", "Hours lost"],
+        DATA.by_hour.map(r => [hourLabel(r.hour), num(r.incidents), num(r.minutes / 60)]));
+
+  // Convert to hours here so the axis, the label and the tooltip all agree.
+  const months = DATA.by_month.map(r => ({ ...r, hours: r.minutes / 60 }));
+  columns("#c-month", months, "hours",
+          (r, i, full) => {
+            if (full) return monthLabel(r.month);
+            const year = String(r.month).slice(0, 4);
+            // Print each year once, at its first month, instead of repeating it.
+            return (i === 0 || String(months[i - 1].month).slice(0, 4) !== year) ? year : "";
+          },
+          "--aqua", r => [["Hours lost", num(r.hours)], ["Delays", num(r.incidents)]], 1);
+  table("t-month", ["Month", "Hours lost", "Delays"],
+        months.slice().reverse().map(r => [monthLabel(r.month), num(r.minutes / 60), num(r.incidents)]));
+
+  $("#stamp").textContent = `${num(m.incidents)} delays analysed · data published by the City of Toronto · last built ${m.generated}`;
+}
+
+$("#theme-btn").addEventListener("click", () => {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  $("#theme-btn").textContent = dark ? "Dark mode" : "Light mode";
+  render();
+});
+if (matchMedia("(prefers-color-scheme: dark)").matches) {
+  document.documentElement.setAttribute("data-theme", "dark");
+  $("#theme-btn").textContent = "Light mode";
+}
+
+fetch("data.json", { cache: "no-store" })
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(d => { DATA = d; render(); })
+  .catch(() => {
+    $("#stamp").textContent = "";
+    // Two different reasons this can fail, and they need different fixes.
+    // Opening the file directly (file://) makes the browser block fetch() for
+    // security reasons even when data.json is sitting right there, so say so
+    // rather than sending someone off to re-run a script that already worked.
+    const isFile = location.protocol === "file:";
+    $("#tiles").innerHTML = `<div class="card" style="grid-column:1/-1"><p class="empty">` +
+      (isFile
+        ? `This page is open as a file, so the browser is blocking it from reading
+           <code>data.json</code>.<br><br>In Terminal, run
+           <code>python3 -m http.server 8000</code> from this folder,<br>
+           then open <code>http://localhost:8000</code> instead.`
+        : `No data yet.<br><br>Run <code>python3 analyze.py --since 2023</code>
+           to create <code>data.json</code>, then refresh.`) +
+      `</p></div>`;
+  });
+
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+</script>
+</body>
+</html>
